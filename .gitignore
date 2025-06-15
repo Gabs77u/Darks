@@ -1,0 +1,58 @@
+# .gitignore para o projeto Darks
+# Estrutura alinhada à documentação e boas práticas Python
+
+# Ambientes virtuais
+venv/
+.env/
+
+# Cache e arquivos temporários
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Configurações de IDE/editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Testes e relatórios temporários
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos sensíveis e exemplos
+.env.example
+*.key
+*.enc
+
+# Certificados e chaves (exemplo de certificado de segurança)
+certs/
+*.crt
+*.pem
+
+# Backup
+*.bak
+
+# Licença MIT
+LICENSE
+
+# Documentação
+# (docs/ é versionado, mas arquivos temporários não)
+docs/*.tmp
+
+# Certificado de segurança (exemplo, não versionar chaves privadas)
+# certs/private.key
+# certs/server.crt
+
+# Fim do .gitignore

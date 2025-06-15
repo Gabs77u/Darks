@@ -1,0 +1,4 @@
+id,usuario,vpn_status,proxy_host,proxy_port,tipo_proxy
+1,admin,conectado,127.0.0.1,50000,SOCKS5
+2,user1,desconectado,127.0.0.1,50001,SOCKS5
+3,user2,conectado,127.0.0.1,50002,SOCKS5

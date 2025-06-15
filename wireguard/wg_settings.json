@@ -1,0 +1,10 @@
+{
+  "interface": "wg0",
+  "private_key": "",
+  "address": "10.0.0.2/24",
+  "dns": "1.1.1.1",
+  "peer_public_key": "",
+  "endpoint": "",
+  "allowed_ips": "0.0.0.0/0",
+  "persistent_keepalive": 25
+}
