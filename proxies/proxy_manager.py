@@ -1,9 +1,23 @@
 import random
 import socket
 import threading
+import logging
+import os
+import requests
 from gui.privacy_config import load_config
 from .proxychains import ProxyChain
 from crypto.security_protocols import SSHManager, ftps_upload
+
+logging.basicConfig(level=logging.INFO)
+LOG_EXTERNAL_URL = os.getenv("LOG_EXTERNAL_URL")
+
+
+def log_external(msg, level="info"):
+    if LOG_EXTERNAL_URL:
+        try:
+            requests.post(LOG_EXTERNAL_URL, json={"log": msg, "level": level})
+        except Exception as e:
+            logging.error(f"Falha ao enviar log externo: {e}")
 
 
 class ProxyManager:
@@ -49,7 +63,8 @@ class ProxyManager:
                 client_handler = threading.Thread(target=handle_client, args=(client,))
                 client_handler.start()
         except Exception as e:
-            print(f"Erro ao iniciar proxy: {e}")
+            logging.error(f"Erro ao iniciar proxy: {e}")
+            log_external(f"Erro ao iniciar proxy: {e}", level="error")
         finally:
             try:
                 server.close()
@@ -82,7 +97,8 @@ class ProxyManager:
             sock = pc.chain_connect(dest_host, dest_port)
             return sock
         except Exception as e:
-            print(f"Erro ao encadear proxies: {e}")
+            logging.error(f"Erro ao encadear proxies: {e}")
+            log_external(f"Erro ao encadear proxies: {e}", level="error")
             return None
 
     def upload_proxy_list_sftp(
@@ -96,13 +112,15 @@ class ProxyManager:
             sftp.close()
             ssh.close()
         except Exception as e:
-            print(f"Erro ao enviar lista via SFTP: {e}")
+            logging.error(f"Erro ao enviar lista via SFTP: {e}")
+            log_external(f"Erro ao enviar lista via SFTP: {e}", level="error")
 
     def upload_proxy_list_ftps(self, host, username, password, local_path, dest_path):
         try:
             ftps_upload(host, username, password, local_path, dest_path)
         except Exception as e:
-            print(f"Erro ao enviar lista via FTPS: {e}")
+            logging.error(f"Erro ao enviar lista via FTPS: {e}")
+            log_external(f"Erro ao enviar lista via FTPS: {e}", level="error")
 
 
 def validate_proxy_config(proxy):

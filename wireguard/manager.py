@@ -3,6 +3,19 @@ import os
 import shutil
 from wireguard.wg_settings import load_wg_settings
 from crypto.security_protocols import generate_self_signed_cert
+import logging
+import requests
+
+logging.basicConfig(level=logging.INFO)
+LOG_EXTERNAL_URL = os.getenv("LOG_EXTERNAL_URL")
+
+
+def log_external(msg, level="info"):
+    if LOG_EXTERNAL_URL:
+        try:
+            requests.post(LOG_EXTERNAL_URL, json={"log": msg, "level": level})
+        except Exception as e:
+            logging.error(f"Falha ao enviar log externo: {e}")
 
 
 class WireGuardManager:
@@ -26,7 +39,8 @@ PersistentKeepalive = {settings['persistent_keepalive']}
             with open(temp_conf, "w") as f:
                 f.write(conf)
         except Exception as e:
-            # Log do erro pode ser adicionado aqui
+            logging.error(f"Erro ao criar arquivo temporário: {e}")
+            log_external(f"Erro ao criar arquivo temporário: {e}", level="error")
             return False, f"Erro ao criar arquivo temporário: {e}"
         if not shutil.which("wg-quick"):
             return False, "WireGuard (wg-quick) não está instalado."
@@ -34,9 +48,12 @@ PersistentKeepalive = {settings['persistent_keepalive']}
             subprocess.run(["wg-quick", "up", temp_conf], check=True)
             return True, "Conectado com sucesso."
         except subprocess.CalledProcessError as e:
-            # Log do erro pode ser adicionado aqui
+            logging.error(f"Erro ao conectar: {e}")
+            log_external(f"Erro ao conectar: {e}", level="error")
             return False, f"Erro ao conectar: {e}"
         except Exception as e:
+            logging.error(f"Erro inesperado ao conectar: {e}")
+            log_external(f"Erro inesperado ao conectar: {e}", level="error")
             return False, f"Erro inesperado ao conectar: {e}"
         finally:
             try:
@@ -54,8 +71,12 @@ PersistentKeepalive = {settings['persistent_keepalive']}
             subprocess.run(["wg-quick", "down", temp_conf], check=True)
             return True, "Desconectado com sucesso."
         except subprocess.CalledProcessError as e:
+            logging.error(f"Erro ao desconectar: {e}")
+            log_external(f"Erro ao desconectar: {e}", level="error")
             return False, f"Erro ao desconectar: {e}"
         except Exception as e:
+            logging.error(f"Erro inesperado ao desconectar: {e}")
+            log_external(f"Erro inesperado ao desconectar: {e}", level="error")
             return False, f"Erro inesperado ao desconectar: {e}"
         finally:
             try:

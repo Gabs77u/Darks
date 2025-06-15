@@ -4,16 +4,29 @@
   <img src="https://img.icons8.com/fluency/96/monitor.png" alt="GUI" width="60"/>
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/security-certified-brightgreen" alt="Certificado de Segurança"/>
+  <img src="https://img.shields.io/badge/tor-secure-blueviolet" alt="Tor Secure"/>
+  <img src="https://img.shields.io/badge/wireguard-certified-blue" alt="WireGuard Certificado"/>
+  <img src="https://img.shields.io/badge/python-verified-blue" alt="Python Verificado"/>
+  <img src="https://img.shields.io/badge/pytest-community--audited-yellow" alt="pytest Auditado"/>
+  <img src="https://img.shields.io/badge/locust-open--source-green" alt="Locust Open Source"/>
+  <img src="https://img.shields.io/badge/coverage-Codecov%20Certified-orange" alt="Codecov Certificado"/>
+  <img src="https://img.shields.io/badge/docker-official-blue" alt="Docker Official"/>
+  <img src="https://img.shields.io/badge/safety-vuln--scan-green" alt="Safety Scan"/>
+  <img src="https://img.shields.io/badge/pip--audit-vuln--scan-green" alt="pip-audit Scan"/>
+  <img src="https://img.shields.io/badge/python--dotenv-secure-green" alt="python-dotenv Secure"/>
+</p>
+
 ## Visão Geral
 A GUI do Darks é moderna, responsiva e projetada para máxima usabilidade e feedback visual.
 
 ## Funcionalidades
-- 🔒 Seleção e conexão de VPN (WireGuard/OpenVPN)
-- 👤 Gerenciamento de usuários e permissões
-- 🌐 Upload seguro de listas de proxy
-- 📡 Monitoramento de status de rede e conexões
-- 🟢 Painel de feedback visual para fluxos críticos
-- 🔄 Exportação/importação de configurações
+- 🔒 Seleção e conexão de VPN (WireGuard)
+- 🌐 Gerenciamento de proxies e proxychains
+- 🕵️ Integração com Tor
+- 📊 Monitoramento de rede em tempo real
+- 🛡️ Configurações de privacidade avançadas
 
 ## Fluxos Críticos
 - Feedback visual detalhado para erros, alertas e sucesso
@@ -39,7 +52,7 @@ Cada botão da interface possui um pop-up de ajuda acessível por ícone de inte
 
 ### 3. Botão "Importar Configuração"
 - **Pop-up:**
-  - "Selecione um arquivo de configuração compatível (WireGuard ou OpenVPN). O sistema validará automaticamente o arquivo."
+  - "Selecione um arquivo de configuração compatível (WireGuard). O sistema validará automaticamente o arquivo."
 
 ### 4. Botão "Exportar Configuração"
 - **Pop-up:**

@@ -45,10 +45,17 @@ def save_proxies_list(proxies):
 
 
 def generate_random_chain(length=3):
+    from gui.main_window import MainWindow
+
     proxies = load_proxies_list()
     if len(proxies) < length:
         raise ValueError("Não há proxies suficientes para gerar a cadeia")
-    return random.sample(proxies, length)
+    chain = random.sample(proxies, length)
+    # Alterna DNS seguro aleatório para cada cadeia
+    dns_chain = MainWindow.get_random_dns_chain(MainWindow, n=length)
+    for i, proxy in enumerate(chain):
+        proxy["dns"] = dns_chain[i % len(dns_chain)]
+    return chain
 
 
 def get_active_proxychain():

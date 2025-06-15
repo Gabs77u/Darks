@@ -27,7 +27,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QPropertyAnimation, QRect, QTimer
 from wireguard.manager import WireGuardManager
-from openvpn.manager import OpenVPNManager
 from proxies.proxy_manager import ProxyManager, validate_proxy_config, ProxyChain
 from proxies.proxychain_manager import (
     generate_random_chain,
@@ -58,13 +57,6 @@ from gui.privacy_config import (
 from gui.kill_switch import enable_kill_switch, disable_kill_switch
 from gui.secure_dns import set_secure_dns
 from gui.tor_integration import start_tor
-from openvpn.settings import (
-    load_ovpn_settings,
-    save_ovpn_settings,
-    get_presets,
-    validate_ovpn_settings,
-    default_ovpn_settings,
-)
 from wireguard.wg_settings import (
     load_wg_settings,
     save_wg_settings,
@@ -182,7 +174,7 @@ class KeyManagerDialog(QDialog):
     def __init__(self, key_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Gerenciar Chave de Criptografia")
-        self.setStyleSheet("background-color: #181c24; color: #f5f6fa;")
+        self.setStyleSheet("background-color: #181c24; color: #f6f6fa;")
         self.setWindowIcon(get_icon("settings"))
         layout = QVBoxLayout(self)
         self.key_path = key_path
@@ -228,7 +220,7 @@ class ConfigBackupDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Backup/Restauração de Configuração Criptografada")
-        self.setStyleSheet("background-color: #181c24; color: #f5f6fa;")
+        self.setStyleSheet("background-color: #181c24; color: #f6f6fa;")
         self.setWindowIcon(get_icon("settings"))
         layout = QVBoxLayout(self)
         btn_export = QPushButton("Exportar Configuração Criptografada")
@@ -294,7 +286,7 @@ class DBBackupDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Backup/Restauração do Banco de Dados Criptografado")
-        self.setStyleSheet("background-color: #181c24; color: #f5f6fa;")
+        self.setStyleSheet("background-color: #181c24; color: #f6f6fa;")
         self.setWindowIcon(get_icon("settings"))
         layout = QVBoxLayout(self)
         btn_export = QPushButton("Exportar Banco de Dados Criptografado")
@@ -362,7 +354,7 @@ class AuditLogDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Logs de Auditoria Criptografados")
-        self.setStyleSheet("background-color: #181c24; color: #f5f6fa;")
+        self.setStyleSheet("background-color: #181c24; color: #f6f6fa;")
         self.setWindowIcon(get_icon("search"))
         layout = QVBoxLayout(self)
         self.log_view = QTextEdit()
@@ -617,7 +609,7 @@ class MainWindow(QMainWindow):
         proto_label = QLabel("Protocolo:")
         proto_label.setStyleSheet("font-size: 18px; color: #b2ebf2;")
         self.protocol_combo = QComboBox()
-        self.protocol_combo.addItems(["WireGuard", "OpenVPN"])
+        self.protocol_combo.addItems(["WireGuard"])
         self.protocol_combo.setStyleSheet(
             """
             background: #222b3a;
@@ -701,26 +693,6 @@ class MainWindow(QMainWindow):
         )
         config_btn.clicked.connect(self.open_wg_settings)
         layout.addWidget(config_btn)
-        # Botão de configurações OpenVPN
-        config_ovpn_btn = QPushButton("Configurações OpenVPN")
-        config_ovpn_btn.setIcon(get_icon("settings"))
-        config_ovpn_btn.setStyleSheet(
-            """
-            QPushButton {
-                background: #1a2332;
-                color: #ff9100;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background: #263859;
-                color: #fff;
-            }
-        """
-        )
-        config_ovpn_btn.clicked.connect(self.open_ovpn_settings)
-        layout.addWidget(config_ovpn_btn)
         panel.setLayout(layout)
         return panel
 
@@ -884,10 +856,14 @@ class MainWindow(QMainWindow):
                 config["tor_enabled"] = tor_enabled_cb.isChecked()
                 save_config(config)
                 logging.info("Configurações Tor salvas.")
-                self.show_feedback("Configurações", "Configurações Tor salvas!", success=True)
+                self.show_feedback(
+                    "Configurações", "Configurações Tor salvas!", success=True
+                )
                 dialog.accept()
             except Exception as e:
-                self.show_feedback("Erro", "Falha ao salvar configurações Tor.", str(e), success=False)
+                self.show_feedback(
+                    "Erro", "Falha ao salvar configurações Tor.", str(e), success=False
+                )
 
         save_btn.clicked.connect(save_tor)
         layout.addRow(save_btn)
@@ -1068,7 +1044,7 @@ class MainWindow(QMainWindow):
 
     def setup_logging(self):
         logging.basicConfig(level=logging.INFO)
-        handler = LogHandler(self.log_widget)
+        handler = LogHandler(self.log_view)
         formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         handler.setFormatter(formatter)
         logging.getLogger().addHandler(handler)
@@ -1143,640 +1119,171 @@ class MainWindow(QMainWindow):
     def connect_vpn(self):
         config = load_config()
         if not self.config_path:
-            self.show_feedback('Atenção', 'Selecione um arquivo de configuração primeiro!', success=False)
+            self.show_feedback(
+                "Atenção",
+                "Selecione um arquivo de configuração primeiro!",
+                success=False,
+            )
             return
         try:
-            if self.selected_protocol == "WireGuard":
-                if platform.system() == "Windows" and not os.path.exists("C:/Program Files/WireGuard/wg.exe"):
-                    self.show_feedback('Erro', 'WireGuard não está instalado no Windows!', success=False)
-                    return
-                set_secure_dns()
-                enable_kill_switch()
+            # 1. Iniciar Tor se ativado
+            if config.get("tor_enabled", False):
                 start_tor()
-                ok, msg = WireGuardManager.start_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Conectado com sucesso!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao conectar WireGuard.', msg, success=False)
-                self.status_label.setText("Status: Conectado" if ok else f"Erro: {msg}")
-            elif self.selected_protocol == "OpenVPN":
-                ok, msg = OpenVPNManager.start_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Conectado com sucesso (OpenVPN)!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao conectar OpenVPN.', msg, success=False)
-                self.status_label.setText("Status: Conectado (OpenVPN)" if ok else f"Erro: {msg}")
-        except Exception as e:
-            self.show_feedback('Erro Crítico', 'Erro inesperado ao conectar VPN.', str(e), success=False)
-
-    def disconnect_vpn(self):
-        if not self.config_path:
-            self.show_feedback('Atenção', 'Selecione um arquivo de configuração primeiro!', success=False)
-            return
-        try:
-            if self.selected_protocol == "WireGuard":
-                disable_kill_switch()
-                ok, msg = WireGuardManager.stop_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Desconectado com sucesso!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao desconectar WireGuard.', msg, success=False)
-                self.status_label.setText("Status: Desconectado" if ok else f"Erro: {msg}")
-            elif self.selected_protocol == "OpenVPN":
-                ok, msg = OpenVPNManager.stop_tunnel()
-                if ok:
-                    self.show_feedback('VPN', 'Desconectado com sucesso (OpenVPN)!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao desconectar OpenVPN.', msg, success=False)
-                self.status_label.setText("Status: Desconectado (OpenVPN)" if ok else f"Erro: {msg}")
-        except Exception as e:
-            self.show_feedback('Erro Crítico', 'Erro inesperado ao desconectar VPN.', str(e), success=False)
-
-    def generate_proxy(self):
-        config = load_config()
-        if not hasattr(self.proxy_manager, "start_random_proxy"):
-            self.show_feedback('Erro', 'ProxyManager não implementa proxy real. Função placeholder.', success=False)
-            return
-        try:
+                self.show_feedback("Tor", "Tor iniciado/local ativo!", success=True)
+            # 2. Aplicar DNS seguro
+            set_secure_dns()
+            self.show_feedback("DNS", "DNS seguro aplicado!", success=True)
+            # 3. Gerar cadeia de proxies com DNS seguro
             if config.get("multi_hop", False):
                 proxies = self.proxy_manager.start_multi_hop(hops=2)
                 for p in proxies:
                     errors = validate_proxy_config(p)
                     if errors:
-                        self.show_feedback('Erro de Validação', 'Proxy inválido.', "\n".join(errors), success=False)
+                        self.show_feedback(
+                            "Erro de Validação",
+                            "Proxy inválido.",
+                            "\n".join(errors),
+                            success=False,
+                        )
                         return
                 self.current_proxy = proxies
-                msg = "\n".join([
-                    f"Proxy: {p['host']}:{p['port']} ({p.get('country','')})" for p in proxies
-                ])
+                msg = "\n".join(
+                    [
+                        f"Proxy: {p['host']}:{p['port']} ({p.get('country','')}) DNS: {p.get('dns','')}"
+                        for p in proxies
+                    ]
+                )
                 self.proxy_label.setText(f"Multi-Hop: {msg}")
                 logging.info(f"Proxies multi-hop gerados: {msg}")
-                self.show_feedback('Proxies Multi-Hop', 'Proxies multi-hop gerados com sucesso!', msg, success=True)
+                self.show_feedback(
+                    "Proxies Multi-Hop",
+                    "Proxies multi-hop gerados com sucesso!",
+                    msg,
+                    success=True,
+                )
             else:
                 proxy = self.proxy_manager.start_random_proxy()
                 errors = validate_proxy_config(proxy)
                 if errors:
-                    self.show_feedback('Erro de Validação', 'Proxy inválido.', "\n".join(errors), success=False)
+                    self.show_feedback(
+                        "Erro de Validação",
+                        "Proxy inválido.",
+                        "\n".join(errors),
+                        success=False,
+                    )
                     return
                 self.current_proxy = proxy
                 self.proxy_label.setText(
-                    f"Proxy: {proxy['host']}:{proxy['port']} ({proxy.get('country','')})"
+                    f"Proxy: {proxy['host']}:{proxy['port']} ({proxy.get('country','')}) DNS: {proxy.get('dns','')}"
                 )
                 logging.info(f"Proxy gerado: {proxy}")
-                self.show_feedback('Proxy Gerado', 'Proxy SOCKS5 rodando!', f"{proxy['host']}:{proxy['port']} ({proxy.get('country','')})", success=True)
-        except Exception as e:
-            logging.error(f"Erro ao gerar proxy: {e}")
-            self.show_feedback('Erro', 'Falha ao gerar proxy.', str(e), success=False)
-
-    def open_api_panel(self):
-        dlg = ApiDialog(self)
-        dlg.exec_()
-
-    def list_users(self):
-        dlg = UserDialog(self)
-        dlg.exec_()
-
-    def add_user(self):
-        usuario, ok = QInputDialog.getText(self, "Novo Usuário", "Nome do usuário:")
-        if ok and usuario:
-            user = {
-                "usuario": usuario,
-                "vpn_status": "desconectado",
-                "proxy_host": "127.0.0.1",
-                "proxy_port": 50000,
-                "tipo_proxy": "SOCKS5",
-            }
-            errors = DBManager.validate_user(user)
-            if errors:
-                self.show_feedback("Erro de Validação", "Dados inválidos para usuário.", "\n".join(errors), success=False)
-                return
-            try:
-                df = DBManager.add_user(usuario, "desconectado", "127.0.0.1", 50000, "SOCKS5")
-                logging.info(f"Usuário adicionado: {usuario}")
-                self.show_feedback("Usuário Adicionado", f"Usuário {usuario} adicionado com sucesso!", success=True)
-                log_audit_event(f"Usuário adicionado: {usuario}")
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao adicionar usuário.", str(e), success=False)
-
-    def remove_user(self):
-        user_id, ok = QInputDialog.getInt(self, "Remover Usuário", "ID do usuário:")
-        if ok:
-            if user_id <= 0:
-                self.show_feedback("Erro", "ID inválido!", success=False)
-                return
-            try:
-                df = DBManager.remove_user(user_id)
-                logging.info(f"Usuário removido: {user_id}")
-                self.show_feedback("Usuário Removido", f"Usuário ID {user_id} removido.", success=True)
-                log_audit_event(f"Usuário removido: {user_id}")
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao remover usuário.", str(e), success=False)
-
-    def edit_user(self):
-        user_id, ok = QInputDialog.getInt(self, "Editar Usuário", "ID do usuário:")
-        if not ok or user_id <= 0:
-            self.show_feedback("Erro", "ID inválido!", success=False)
-            return
-        usuario, ok1 = QInputDialog.getText(self, "Editar Usuário", "Novo nome (deixe vazio para não alterar):")
-        status, ok2 = QInputDialog.getText(self, "Editar Usuário", "Novo status (conectado/desconectado):")
-        host, ok3 = QInputDialog.getText(self, "Editar Usuário", "Novo host (deixe vazio para não alterar):")
-        port, ok4 = QInputDialog.getInt(self, "Editar Usuário", "Nova porta (0 para não alterar):")
-        tipo, ok5 = QInputDialog.getText(self, "Editar Usuário", "Novo tipo de proxy (deixe vazio para não alterar):")
-        if any([ok1, ok2, ok3, ok4, ok5]):
-            port_val = port if port != 0 else None
-            user = {
-                "usuario": usuario or "user",
-                "vpn_status": status or "desconectado",
-                "proxy_host": host or "127.0.0.1",
-                "proxy_port": port_val or 50000,
-                "tipo_proxy": tipo or "SOCKS5",
-            }
-            errors = DBManager.validate_user(user)
-            if errors:
-                self.show_feedback("Erro de Validação", "Dados inválidos para usuário.", "\n".join(errors), success=False)
-                return
-            try:
-                df = DBManager.edit_user(
-                    user_id,
-                    usuario or None,
-                    status or None,
-                    host or None,
-                    port_val,
-                    tipo or None,
+                self.show_feedback(
+                    "Proxy Gerado",
+                    "Proxy SOCKS5 rodando!",
+                    f"{proxy['host']}:{proxy['port']} ({proxy.get('country','')}) DNS: {proxy.get('dns','')}",
+                    success=True,
                 )
-                logging.info(f"Usuário editado: {user_id}")
-                self.show_feedback("Usuário Editado", f"Usuário ID {user_id} editado.", success=True)
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao editar usuário.", str(e), success=False)
-
-    def export_config(self):
-        from gui.privacy_config import export_encrypted_config
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Configuração', '', 'Arquivo Criptografado (*.enc)')
-        if path:
-            try:
-                if export_encrypted_config(path):
-                    self.show_feedback('Exportação', 'Configuração exportada com sucesso!', success=True)
+            # 4. Conectar WireGuard
+            if self.selected_protocol == "WireGuard":
+                if platform.system() == "Windows" and not os.path.exists(
+                    "C:/Program Files/WireGuard/wg.exe"
+                ):
+                    self.show_feedback(
+                        "Erro",
+                        "WireGuard não está instalado no Windows!",
+                        success=False,
+                    )
+                    return
+                enable_kill_switch()
+                ok, msg = WireGuardManager.start_tunnel(self.config_path)
+                if ok:
+                    self.show_feedback(
+                        "VPN", "Conectado com sucesso!", msg, success=True
+                    )
+                    self.vpn_status_label.setText("Status: Conectado")
                 else:
-                    self.show_feedback('Exportação', 'Falha ao exportar configuração.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar configuração.', str(e), success=False)
-
-    def import_config(self):
-        from gui.privacy_config import import_encrypted_config
-        path, _ = QFileDialog.getOpenFileName(self, 'Importar Configuração', '', 'Arquivo Criptografado (*.enc)')
-        if path:
-            try:
-                if import_encrypted_config(path):
-                    self.show_feedback('Importação', 'Configuração importada e validada com sucesso!', success=True)
-                else:
-                    self.show_feedback('Importação', 'Falha ao importar ou validar configuração.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao importar configuração.', str(e), success=False)
-
-    def export_users(self):
-        from gui.db_manager import save_encrypted_db, DBManager
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Usuários', '', 'Banco Criptografado (*.enc)')
-        if path:
-            try:
-                df = DBManager.load_db()
-                save_encrypted_db(df)
-                self.show_feedback('Exportação', 'Usuários exportados com sucesso!', success=True)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar usuários.', str(e), success=False)
-
-    def import_users(self):
-        from gui.db_manager import import_encrypted_db
-        path, _ = QFileDialog.getOpenFileName(self, 'Importar Usuários', '', 'Banco Criptografado (*.enc)')
-        if path:
-            try:
-                if import_encrypted_db(path):
-                    self.show_feedback('Importação', 'Usuários importados e validados com sucesso!', success=True)
-                else:
-                    self.show_feedback('Importação', 'Falha ao importar ou validar usuários.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao importar usuários.', str(e), success=False)
-
-    def export_logs(self):
-        from gui.audit_log import log_audit_event
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Logs', '', 'Logs Criptografados (*.enc)')
-        if path:
-            try:
-                # Simplesmente copia o arquivo de log criptografado
-                import shutil
-                log_path = os.path.join(os.path.dirname(__file__), 'audit.log.enc')
-                shutil.copy(log_path, path)
-                self.show_feedback('Exportação', 'Logs exportados com sucesso!', success=True)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar logs.', str(e), success=False)
-
-    def reset_all(self):
-        from gui.privacy_config import reset_config
-        try:
-            reset_config()
-            self.show_feedback('Reset', 'Sistema resetado para o padrão!', success=True)
+                    self.show_feedback(
+                        "Erro VPN", "Falha ao conectar WireGuard.", msg, success=False
+                    )
+                    self.vpn_status_label.setText(f"Erro: {msg}")
         except Exception as e:
-            self.show_feedback('Erro', 'Erro ao resetar sistema.', str(e), success=False)
+            self.show_feedback(
+                "Erro Crítico",
+                "Erro inesperado ao conectar VPN.",
+                str(e),
+                success=False,
+            )
 
-    def open_key_manager(self):
-        from gui.privacy_config import KEY_PATH
-
-        log_audit_event("Acesso ao gerenciamento de chave de criptografia")
-        dlg = KeyManagerDialog(KEY_PATH, self)
-        dlg.exec_()
-
-    def open_config_backup(self):
-        log_audit_event("Acesso ao backup/restauração de configuração")
-        dlg = ConfigBackupDialog(self)
-        dlg.exec_()
-
-    def open_db_backup(self):
-        log_audit_event("Acesso ao backup/restauração do banco de dados")
-        dlg = DBBackupDialog(self)
-        dlg.exec_()
-
-    def open_audit_logs(self):
-        log_audit_event("Acesso aos logs de auditoria")
-        dlg = AuditLogDialog(self)
-        dlg.exec_()
-
-    def toggle_tor(self):
-        from gui.privacy_config import load_config, save_config
-
-        config = load_config()
-        tor_enabled = config.get("tor_enabled", False)
-        config["tor_enabled"] = not tor_enabled
-        save_config(config)
-        if config["tor_enabled"]:
-            from gui.tor_integration import start_tor
-
-            start_tor()
-            self.tor_status_label.setText("Tor: Ativado")
-            self.tor_toggle_btn.setText("Desativar Tor")
-            self.tor_toggle_btn.setIcon(get_icon("tor_on"))
-        else:
-            self.tor_status_label.setText("Tor: Desativado")
-            self.tor_toggle_btn.setText("Ativar Tor")
-            self.tor_toggle_btn.setIcon(get_icon("tor_off"))
-
-    def open_proxy_chain_dialog(self):
-        dialog = ProxyDialog(self)
-        dialog.exec_()
-
-    def update_proxies_from_scraper_action(self):
+    def disconnect_vpn(self):
         try:
-            update_proxies_from_scraper()
-            QMessageBox.information(self, "Proxies", "Proxies atualizados com sucesso!")
+            # 1. Desconectar WireGuard
+            if self.selected_protocol == "WireGuard":
+                from wireguard.manager import WireGuardManager
+                ok, msg = WireGuardManager.stop_tunnel(self.config_path)
+                if ok:
+                    self.show_feedback("VPN", "Desconectado com sucesso!", msg, success=True)
+                    self.vpn_status_label.setText("Status: Desconectado")
+                else:
+                    self.show_feedback("Erro VPN", "Falha ao desconectar WireGuard.", msg, success=False)
+                    self.vpn_status_label.setText(f"Erro: {msg}")
+            # 2. Desativar kill switch
+            try:
+                from gui.kill_switch import disable_kill_switch
+                disable_kill_switch()
+            except Exception:
+                pass
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao atualizar proxies: {e}")
+            self.show_feedback(
+                "Erro Crítico",
+                "Erro inesperado ao desconectar VPN.",
+                str(e),
+                success=False,
+            )
 
-    def init_network_monitor(self):
-        # Inicialização básica do monitor de rede (pode ser expandido conforme necessário)
-        pass
-
-    def toggle_multi_hop(self):
-        config = load_config()
-        multi_hop_enabled = config.get("multi_hop", False)
-        config["multi_hop"] = not multi_hop_enabled
-        save_config(config)
-        if config["multi_hop"]:
-            self.proxy_multi_btn.setText("Desativar Multi-Hop")
-            self.proxy_multi_btn.setIcon(get_icon("proxy_off"))
-            QMessageBox.information(self, "Multi-Hop", "Multi-Hop ativado.")
-        else:
-            self.proxy_multi_btn.setText("Ativar Multi-Hop")
-            self.proxy_multi_btn.setIcon(get_icon("proxy_on"))
-            QMessageBox.information(self, "Multi-Hop", "Multi-Hop desativado.")
-
-class FeedbackPanel(QDialog):
-    def __init__(self, title, message, details=None, success=True, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-        self.setStyleSheet(
-            f"background-color: {'#263238' if success else '#c0392b'}; color: #f5f6fa; border-radius: 12px;"
+    def open_wg_settings(self):
+        QMessageBox.information(
+            self,
+            "Configurações WireGuard",
+            "Funcionalidade de configurações WireGuard em desenvolvimento."
         )
-        layout = QVBoxLayout(self)
-        label = QLabel(message)
-        label.setStyleSheet('font-size: 18px; font-weight: bold;')
-        layout.addWidget(label)
-        if details:
-            details_box = QTextEdit()
-            details_box.setReadOnly(True)
-            details_box.setPlainText(details)
-            details_box.setStyleSheet('background: #181c24; color: #ffd600; border-radius: 8px;')
-            layout.addWidget(details_box)
-        btn = QPushButton('OK')
-        btn.clicked.connect(self.accept)
-        btn.setStyleSheet('background: #00e676; color: #181c24; border-radius: 8px; padding: 8px;')
-        layout.addWidget(btn)
-        self.setLayout(layout)
-
-    def show_feedback(self, title, message, details=None, success=True):
-        dlg = FeedbackPanel(title, message, details, success, self)
-        dlg.exec_()
-
-    # Exemplo de uso nos métodos críticos:
-    def connect_vpn(self):
-        config = load_config()
-        if not self.config_path:
-            self.show_feedback('Atenção', 'Selecione um arquivo de configuração primeiro!', success=False)
-            return
-        try:
-            if self.selected_protocol == "WireGuard":
-                if platform.system() == "Windows" and not os.path.exists("C:/Program Files/WireGuard/wg.exe"):
-                    self.show_feedback('Erro', 'WireGuard não está instalado no Windows!', success=False)
-                    return
-                set_secure_dns()
-                enable_kill_switch()
-                start_tor()
-                ok, msg = WireGuardManager.start_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Conectado com sucesso!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao conectar WireGuard.', msg, success=False)
-                self.status_label.setText("Status: Conectado" if ok else f"Erro: {msg}")
-            elif self.selected_protocol == "OpenVPN":
-                ok, msg = OpenVPNManager.start_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Conectado com sucesso (OpenVPN)!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao conectar OpenVPN.', msg, success=False)
-                self.status_label.setText("Status: Conectado (OpenVPN)" if ok else f"Erro: {msg}")
-        except Exception as e:
-            self.show_feedback('Erro Crítico', 'Erro inesperado ao conectar VPN.', str(e), success=False)
-
-    def disconnect_vpn(self):
-        if not self.config_path:
-            self.show_feedback('Atenção', 'Selecione um arquivo de configuração primeiro!', success=False)
-            return
-        try:
-            if self.selected_protocol == "WireGuard":
-                disable_kill_switch()
-                ok, msg = WireGuardManager.stop_tunnel(self.config_path)
-                if ok:
-                    self.show_feedback('VPN', 'Desconectado com sucesso!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao desconectar WireGuard.', msg, success=False)
-                self.status_label.setText("Status: Desconectado" if ok else f"Erro: {msg}")
-            elif self.selected_protocol == "OpenVPN":
-                ok, msg = OpenVPNManager.stop_tunnel()
-                if ok:
-                    self.show_feedback('VPN', 'Desconectado com sucesso (OpenVPN)!', msg, success=True)
-                else:
-                    self.show_feedback('Erro VPN', 'Falha ao desconectar OpenVPN.', msg, success=False)
-                self.status_label.setText("Status: Desconectado (OpenVPN)" if ok else f"Erro: {msg}")
-        except Exception as e:
-            self.show_feedback('Erro Crítico', 'Erro inesperado ao desconectar VPN.', str(e), success=False)
 
     def generate_proxy(self):
-        config = load_config()
-        if not hasattr(self.proxy_manager, "start_random_proxy"):
-            self.show_feedback('Erro', 'ProxyManager não implementa proxy real. Função placeholder.', success=False)
-            return
-        try:
-            if config.get("multi_hop", False):
-                proxies = self.proxy_manager.start_multi_hop(hops=2)
-                for p in proxies:
-                    errors = validate_proxy_config(p)
-                    if errors:
-                        self.show_feedback('Erro de Validação', 'Proxy inválido.', "\n".join(errors), success=False)
-                        return
-                self.current_proxy = proxies
-                msg = "\n".join([
-                    f"Proxy: {p['host']}:{p['port']} ({p.get('country','')})" for p in proxies
-                ])
-                self.proxy_label.setText(f"Multi-Hop: {msg}")
-                logging.info(f"Proxies multi-hop gerados: {msg}")
-                self.show_feedback('Proxies Multi-Hop', 'Proxies multi-hop gerados com sucesso!', msg, success=True)
-            else:
-                proxy = self.proxy_manager.start_random_proxy()
-                errors = validate_proxy_config(proxy)
-                if errors:
-                    self.show_feedback('Erro de Validação', 'Proxy inválido.', "\n".join(errors), success=False)
-                    return
-                self.current_proxy = proxy
-                self.proxy_label.setText(
-                    f"Proxy: {proxy['host']}:{proxy['port']} ({proxy.get('country','')})"
-                )
-                logging.info(f"Proxy gerado: {proxy}")
-                self.show_feedback('Proxy Gerado', 'Proxy SOCKS5 rodando!', f"{proxy['host']}:{proxy['port']} ({proxy.get('country','')})", success=True)
-        except Exception as e:
-            logging.error(f"Erro ao gerar proxy: {e}")
-            self.show_feedback('Erro', 'Falha ao gerar proxy.', str(e), success=False)
-
-    def open_api_panel(self):
-        dlg = ApiDialog(self)
-        dlg.exec_()
-
-    def list_users(self):
-        dlg = UserDialog(self)
-        dlg.exec_()
-
-    def add_user(self):
-        usuario, ok = QInputDialog.getText(self, "Novo Usuário", "Nome do usuário:")
-        if ok and usuario:
-            user = {
-                "usuario": usuario,
-                "vpn_status": "desconectado",
-                "proxy_host": "127.0.0.1",
-                "proxy_port": 50000,
-                "tipo_proxy": "SOCKS5",
-            }
-            errors = DBManager.validate_user(user)
-            if errors:
-                self.show_feedback("Erro de Validação", "Dados inválidos para usuário.", "\n".join(errors), success=False)
-                return
-            try:
-                df = DBManager.add_user(usuario, "desconectado", "127.0.0.1", 50000, "SOCKS5")
-                logging.info(f"Usuário adicionado: {usuario}")
-                self.show_feedback("Usuário Adicionado", f"Usuário {usuario} adicionado com sucesso!", success=True)
-                log_audit_event(f"Usuário adicionado: {usuario}")
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao adicionar usuário.", str(e), success=False)
-
-    def remove_user(self):
-        user_id, ok = QInputDialog.getInt(self, "Remover Usuário", "ID do usuário:")
-        if ok:
-            if user_id <= 0:
-                self.show_feedback("Erro", "ID inválido!", success=False)
-                return
-            try:
-                df = DBManager.remove_user(user_id)
-                logging.info(f"Usuário removido: {user_id}")
-                self.show_feedback("Usuário Removido", f"Usuário ID {user_id} removido.", success=True)
-                log_audit_event(f"Usuário removido: {user_id}")
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao remover usuário.", str(e), success=False)
-
-    def edit_user(self):
-        user_id, ok = QInputDialog.getInt(self, "Editar Usuário", "ID do usuário:")
-        if not ok or user_id <= 0:
-            self.show_feedback("Erro", "ID inválido!", success=False)
-            return
-        usuario, ok1 = QInputDialog.getText(self, "Editar Usuário", "Novo nome (deixe vazio para não alterar):")
-        status, ok2 = QInputDialog.getText(self, "Editar Usuário", "Novo status (conectado/desconectado):")
-        host, ok3 = QInputDialog.getText(self, "Editar Usuário", "Novo host (deixe vazio para não alterar):")
-        port, ok4 = QInputDialog.getInt(self, "Editar Usuário", "Nova porta (0 para não alterar):")
-        tipo, ok5 = QInputDialog.getText(self, "Editar Usuário", "Novo tipo de proxy (deixe vazio para não alterar):")
-        if any([ok1, ok2, ok3, ok4, ok5]):
-            port_val = port if port != 0 else None
-            user = {
-                "usuario": usuario or "user",
-                "vpn_status": status or "desconectado",
-                "proxy_host": host or "127.0.0.1",
-                "proxy_port": port_val or 50000,
-                "tipo_proxy": tipo or "SOCKS5",
-            }
-            errors = DBManager.validate_user(user)
-            if errors:
-                self.show_feedback("Erro de Validação", "Dados inválidos para usuário.", "\n".join(errors), success=False)
-                return
-            try:
-                df = DBManager.edit_user(
-                    user_id,
-                    usuario or None,
-                    status or None,
-                    host or None,
-                    port_val,
-                    tipo or None,
-                )
-                logging.info(f"Usuário editado: {user_id}")
-                self.show_feedback("Usuário Editado", f"Usuário ID {user_id} editado.", success=True)
-            except Exception as e:
-                self.show_feedback("Erro", "Falha ao editar usuário.", str(e), success=False)
-
-    def export_config(self):
-        from gui.privacy_config import export_encrypted_config
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Configuração', '', 'Arquivo Criptografado (*.enc)')
-        if path:
-            try:
-                if export_encrypted_config(path):
-                    self.show_feedback('Exportação', 'Configuração exportada com sucesso!', success=True)
-                else:
-                    self.show_feedback('Exportação', 'Falha ao exportar configuração.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar configuração.', str(e), success=False)
-
-    def import_config(self):
-        from gui.privacy_config import import_encrypted_config
-        path, _ = QFileDialog.getOpenFileName(self, 'Importar Configuração', '', 'Arquivo Criptografado (*.enc)')
-        if path:
-            try:
-                if import_encrypted_config(path):
-                    self.show_feedback('Importação', 'Configuração importada e validada com sucesso!', success=True)
-                else:
-                    self.show_feedback('Importação', 'Falha ao importar ou validar configuração.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao importar configuração.', str(e), success=False)
-
-    def export_users(self):
-        from gui.db_manager import save_encrypted_db, DBManager
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Usuários', '', 'Banco Criptografado (*.enc)')
-        if path:
-            try:
-                df = DBManager.load_db()
-                save_encrypted_db(df)
-                self.show_feedback('Exportação', 'Usuários exportados com sucesso!', success=True)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar usuários.', str(e), success=False)
-
-    def import_users(self):
-        from gui.db_manager import import_encrypted_db
-        path, _ = QFileDialog.getOpenFileName(self, 'Importar Usuários', '', 'Banco Criptografado (*.enc)')
-        if path:
-            try:
-                if import_encrypted_db(path):
-                    self.show_feedback('Importação', 'Usuários importados e validados com sucesso!', success=True)
-                else:
-                    self.show_feedback('Importação', 'Falha ao importar ou validar usuários.', success=False)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao importar usuários.', str(e), success=False)
-
-    def export_logs(self):
-        from gui.audit_log import log_audit_event
-        path, _ = QFileDialog.getSaveFileName(self, 'Exportar Logs', '', 'Logs Criptografados (*.enc)')
-        if path:
-            try:
-                # Simplesmente copia o arquivo de log criptografado
-                import shutil
-                log_path = os.path.join(os.path.dirname(__file__), 'audit.log.enc')
-                shutil.copy(log_path, path)
-                self.show_feedback('Exportação', 'Logs exportados com sucesso!', success=True)
-            except Exception as e:
-                self.show_feedback('Erro', 'Erro ao exportar logs.', str(e), success=False)
-
-    def reset_all(self):
-        from gui.privacy_config import reset_config
-        try:
-            reset_config()
-            self.show_feedback('Reset', 'Sistema resetado para o padrão!', success=True)
-        except Exception as e:
-            self.show_feedback('Erro', 'Erro ao resetar sistema.', str(e), success=False)
-
-    def open_key_manager(self):
-        from gui.privacy_config import KEY_PATH
-
-        log_audit_event("Acesso ao gerenciamento de chave de criptografia")
-        dlg = KeyManagerDialog(KEY_PATH, self)
-        dlg.exec_()
-
-    def open_config_backup(self):
-        log_audit_event("Acesso ao backup/restauração de configuração")
-        dlg = ConfigBackupDialog(self)
-        dlg.exec_()
-
-    def open_db_backup(self):
-        log_audit_event("Acesso ao backup/restauração do banco de dados")
-        dlg = DBBackupDialog(self)
-        dlg.exec_()
-
-    def open_audit_logs(self):
-        log_audit_event("Acesso aos logs de auditoria")
-        dlg = AuditLogDialog(self)
-        dlg.exec_()
-
-    def toggle_tor(self):
-        from gui.privacy_config import load_config, save_config
-
-        config = load_config()
-        tor_enabled = config.get("tor_enabled", False)
-        config["tor_enabled"] = not tor_enabled
-        save_config(config)
-        if config["tor_enabled"]:
-            from gui.tor_integration import start_tor
-
-            start_tor()
-            self.tor_status_label.setText("Tor: Ativado")
-            self.tor_toggle_btn.setText("Desativar Tor")
-            self.tor_toggle_btn.setIcon(get_icon("tor_on"))
-        else:
-            self.tor_status_label.setText("Tor: Desativado")
-            self.tor_toggle_btn.setText("Ativar Tor")
-            self.tor_toggle_btn.setIcon(get_icon("tor_off"))
-
-    def open_proxy_chain_dialog(self):
-        dialog = ProxyDialog(self)
-        dialog.exec_()
-
-    def update_proxies_from_scraper_action(self):
-        try:
-            update_proxies_from_scraper()
-            QMessageBox.information(self, "Proxies", "Proxies atualizados com sucesso!")
-        except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao atualizar proxies: {e}")
-
-    def init_network_monitor(self):
-        # Inicialização básica do monitor de rede (pode ser expandido conforme necessário)
-        pass
+        QMessageBox.information(
+            self,
+            "Gerar Proxy",
+            "Funcionalidade de geração de proxy em desenvolvimento."
+        )
 
     def toggle_multi_hop(self):
-        config = load_config()
-        multi_hop_enabled = config.get("multi_hop", False)
-        config["multi_hop"] = not multi_hop_enabled
-        save_config(config)
-        if config["multi_hop"]:
-            self.proxy_multi_btn.setText("Desativar Multi-Hop")
-            self.proxy_multi_btn.setIcon(get_icon("proxy_off"))
-            QMessageBox.information(self, "Multi-Hop", "Multi-Hop ativado.")
-        else:
-            self.proxy_multi_btn.setText("Ativar Multi-Hop")
-            self.proxy
+        QMessageBox.information(
+            self,
+            "Multi-Hop",
+            "Funcionalidade de Multi-Hop em desenvolvimento."
+        )
+
+    def toggle_tor(self):
+        QMessageBox.information(
+            self,
+            "Tor",
+            "Funcionalidade de ativação/desativação do Tor em desenvolvimento."
+        )
+
+    def create_users_panel(self):
+        w = QWidget()
+        l = QVBoxLayout()
+        lbl = QLabel("Painel de usuários em desenvolvimento.")
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet("font-size: 22px; color: #b2ebf2;")
+        l.addWidget(lbl)
+        w.setLayout(l)
+        return w
+
+    def create_settings_panel(self):
+        w = QWidget()
+        l = QVBoxLayout()
+        lbl = QLabel("Painel de configurações em desenvolvimento.")
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet("font-size: 22px; color: #b2ebf2;")
+        l.addWidget(lbl)
+        w.setLayout(l)
+        return w

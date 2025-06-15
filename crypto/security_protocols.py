@@ -35,6 +35,20 @@ from cryptography.hazmat.backends import default_backend
 import os
 import ssl
 import paramiko
+import logging
+import requests
+
+
+logging.basicConfig(level=logging.INFO)
+LOG_EXTERNAL_URL = os.getenv("LOG_EXTERNAL_URL")
+
+
+def log_external(msg, level="info"):
+    if LOG_EXTERNAL_URL:
+        try:
+            requests.post(LOG_EXTERNAL_URL, json={"log": msg, "level": level})
+        except Exception as e:
+            logging.error(f"Falha ao enviar log externo: {e}")
 
 
 # AES - Criptografia Simétrica
@@ -59,6 +73,8 @@ class AESCipher:
             ct = encryptor.update(padded_data) + encryptor.finalize()
             return iv + ct
         except Exception as e:
+            logging.error(f"Erro ao criptografar dados: {e}")
+            log_external(f"Erro ao criptografar dados: {e}", level="error")
             raise RuntimeError(f"Erro ao criptografar dados: {e}")
 
     def decrypt(self, enc: bytes) -> bytes:
@@ -74,6 +90,8 @@ class AESCipher:
             data = unpadder.update(padded_data) + unpadder.finalize()
             return data
         except Exception as e:
+            logging.error(f"Erro ao descriptografar dados: {e}")
+            log_external(f"Erro ao descriptografar dados: {e}", level="error")
             raise RuntimeError(f"Erro ao descriptografar dados: {e}")
 
 
@@ -98,6 +116,8 @@ def generate_self_signed_cert(cert_file: str, key_file: str, CN: str = "localhos
         with open(key_file, "wt") as f:
             f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("utf-8"))
     except Exception as e:
+        logging.error(f"Erro ao gerar certificado: {e}")
+        log_external(f"Erro ao gerar certificado: {e}", level="error")
         raise RuntimeError(f"Erro ao gerar certificado: {e}")
 
 

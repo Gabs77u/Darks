@@ -1,11 +1,32 @@
-pyqt5
-qtawesome
-requests
-django
-djangorestframework
-cryptography
-psutil
+# Requisitos principais
+PyQt5
 pandas
-python-dotenv
+psutil
+requests
+paramiko
+cryptography
+pyopenssl
 pytest
+pytest-benchmark
+pytest-qt
+locust
+python-dotenv
+qtawesome
+matplotlib
+numpy
+Django
+djangorestframework
+# Dependências opcionais para dev/ci
+safety
+pip-audit
+coverage
+coveralls
+black
+# Para integração FTPS
+pyftpdlib
+# Para integração SFTP
+pysftp
+# Para integração com SOCKS
 pysocks
+# Para integração com WireGuard (instalação externa)
+# wireguard-tools (instale via sistema)

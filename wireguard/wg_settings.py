@@ -1,7 +1,21 @@
 import json
+import logging
 import os
+import requests
 
 WG_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "wg_settings.json")
+
+# Configuração básica de logging
+logging.basicConfig(level=logging.INFO)
+LOG_EXTERNAL_URL = os.getenv("LOG_EXTERNAL_URL")
+
+
+def log_external(msg, level="info"):
+    if LOG_EXTERNAL_URL:
+        try:
+            requests.post(LOG_EXTERNAL_URL, json={"log": msg, "level": level})
+        except Exception as e:
+            logging.error(f"Falha ao enviar log externo: {e}")
 
 
 def default_wg_settings():
@@ -28,10 +42,14 @@ def load_wg_settings():
             raise ValueError(f"Configuração inválida: {errors}")
         return data
     except (json.JSONDecodeError, ValueError) as e:
+        logging.error(f"Erro: {e}")
+        log_external(f"Erro: {e}", level="error")
         # Log do erro pode ser adicionado aqui
         save_wg_settings(default_wg_settings())
         return default_wg_settings()
     except Exception as e:
+        logging.error(f"Erro: {e}")
+        log_external(f"Erro: {e}", level="error")
         # Log do erro pode ser adicionado aqui
         raise RuntimeError(f"Erro ao carregar configurações WireGuard: {e}")
 
