@@ -6,27 +6,32 @@ requests
 paramiko
 cryptography
 pyopenssl
-pytest
-pytest-benchmark
-pytest-qt
-locust
-python-dotenv
 qtawesome
 matplotlib
 numpy
 Django
 djangorestframework
-# Dependências opcionais para dev/ci
+python-dotenv
+
+# Execução e integração
+locust
+pytest
+pytest-qt
+pytest-mock
+pytest-benchmark
+pytest-playwright
+pytest-cov
 safety
 pip-audit
+black
 coverage
 coveralls
-black
-# Para integração FTPS
+
+# Integração FTPS
 pyftpdlib
-# Para integração SFTP
+# Integração SFTP
 pysftp
-# Para integração com SOCKS
+# Integração SOCKS
 pysocks
-# Para integração com WireGuard (instalação externa)
+# WireGuard (instalação externa)
 # wireguard-tools (instale via sistema)

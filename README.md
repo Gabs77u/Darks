@@ -71,16 +71,31 @@ python api_server.py
 - [Exemplo de configuração segura](.env.example)
 
 ## 🧪 Testes e Qualidade
-- [Estrutura de testes granularizada](docs/estrutura_testes.md)
-- [Benchmarks de performance](docs/benchmarks.md)
-- [Testes de carga e stress](docs/stress_load_tests.md)
-- [Testes E2E da interface gráfica](docs/e2e_gui.md)
-- [Badge real de coverage: como configurar](docs/coverage_badge.md)
+- Estrutura de testes granularizada por módulo em `tests/`
+- Testes unitários, integração e E2E (pytest, pytest-qt, pytest-playwright)
+- Benchmarks de performance (pytest-benchmark)
+- Testes de carga/stress (locust)
+- Cobertura de código (pytest-cov, coverage)
+- Segurança de dependências (safety, pip-audit)
 
 ### Executando todos os testes
 ```bash
-pytest tests/
+pytest --cov=gui --cov=crypto --cov=wireguard --cov=proxies --cov=integrations --cov-report=term --cov-report=html
 ```
+
+### Instalando dependências
+```bash
+pip install -r requirements.txt
+```
+
+### Ambiente de produção
+- Instale WireGuard e Tor no sistema (externo ao Python)
+- Configure variáveis de ambiente sensíveis
+
+### Ambiente de desenvolvimento/testes
+- Use `pytest`, `pytest-qt`, `pytest-playwright` para rodar todos os testes
+- Use `pytest-cov` para cobertura
+- Use `locust` para stress/carga
 
 ## 📁 Estrutura de Diretórios
 ```

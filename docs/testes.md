@@ -21,16 +21,19 @@
 ---
 
 ## Estrutura
-- Todos os testes estão em `tests/test_all.py`
+- Testes organizados por módulo em subpastas de `tests/`
 - Cobertura de 100% dos módulos críticos
 - Testes de segurança, anonimato, integração, falhas, logs, banco de dados, exportação/importação
+- Testes E2E em `tests/e2e/` (pytest-qt, pytest-playwright)
 
 ## Como Executar
 ```bash
-pytest tests/test_all.py --maxfail=5 --disable-warnings -v
+pytest --cov=gui --cov=crypto --cov=wireguard --cov=proxies --cov=integrations --cov-report=term --cov-report=html
 ```
 
 ## Boas Práticas
 - Escreva testes para cada nova funcionalidade
 - Use dados reais e cenários de borda
 - Revise resultados e logs após cada execução
+- Use mocks e fixtures para dependências externas
+- Garanta que todos os testes passem antes do pull request
